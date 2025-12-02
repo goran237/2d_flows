@@ -1,0 +1,60 @@
+.flow-canvas-container {
+  flex: 1;
+  overflow: auto;
+  background: white;
+  padding: 2rem;
+  position: relative;
+}
+
+.branch-creation-hint {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #667eea;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  z-index: 100;
+  pointer-events: none;
+}
+
+.flow-canvas {
+  position: relative;
+  width: 100%;
+  min-width: 1200px;
+  background: #fafbfc;
+  border: 2px dashed #e2e8f0;
+  border-radius: 8px;
+  overflow: visible;
+}
+
+.flow-svg {
+  display: block;
+  cursor: default;
+}
+
+.flow-svg.branch-mode {
+  cursor: crosshair;
+}
+
+.ticker {
+  pointer-events: none;
+}
+
+.ticker-bar {
+  opacity: 0.5;
+}
+
+.ticker-line {
+  transition: stroke 0.2s;
+}
+
+.ticker-label {
+  user-select: none;
+  pointer-events: none;
+}
+

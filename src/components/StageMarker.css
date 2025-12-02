@@ -1,0 +1,115 @@
+.stage-marker {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.stage-marker.dragging {
+  cursor: grabbing;
+  opacity: 0.8;
+}
+
+.stage-marker.selected .sankey-node {
+  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+  stroke: #667eea;
+  stroke-width: 2;
+}
+
+.stage-marker:hover .sankey-node {
+  filter: brightness(1.1);
+}
+
+.sankey-node {
+  transition: all 0.2s;
+}
+
+.stage-marker:hover .entry-point,
+.stage-marker:hover .exit-point {
+  height: 18;
+  width: 10;
+}
+
+.entry-point,
+.exit-point {
+  transition: all 0.2s;
+  pointer-events: none;
+}
+
+.marker-line {
+  transition: all 0.2s;
+}
+
+.marker-hitbox {
+  pointer-events: all;
+}
+
+.label-background {
+  transition: all 0.2s;
+}
+
+.stage-label {
+  user-select: none;
+  pointer-events: all;
+}
+
+.stage-name-input {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  padding: 4px 8px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  font-family: inherit;
+  background: transparent;
+  color: #1a202c;
+}
+
+.delete-icon-group {
+  pointer-events: all;
+  cursor: pointer;
+  z-index: 100;
+}
+
+.delete-icon-circle {
+  transition: all 0.2s;
+  filter: drop-shadow(0 2px 4px rgba(239, 68, 68, 0.3));
+  pointer-events: all;
+}
+
+.delete-icon-group:hover .delete-icon-circle {
+  fill: #dc2626;
+  r: 14;
+  filter: drop-shadow(0 4px 8px rgba(239, 68, 68, 0.4));
+}
+
+.delete-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.disconnect-icon-circle {
+  transition: all 0.2s;
+  filter: drop-shadow(0 2px 4px rgba(245, 158, 11, 0.3));
+  pointer-events: all;
+}
+
+.disconnect-icon-circle:hover {
+  fill: #d97706;
+  r: 12;
+  filter: drop-shadow(0 4px 8px rgba(245, 158, 11, 0.4));
+}
+
+.disconnect-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+

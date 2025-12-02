@@ -1,0 +1,24 @@
+.flow-path {
+  pointer-events: all;
+  cursor: pointer;
+}
+
+.sankey-flow {
+  transition: all 0.2s;
+}
+
+.flow-path:hover .sankey-flow {
+  fillOpacity: 0.8;
+  filter: brightness(1.1);
+}
+
+.flow-label {
+  user-select: none;
+  pointer-events: none;
+}
+
+.flow-value {
+  user-select: none;
+  pointer-events: none;
+}
+
