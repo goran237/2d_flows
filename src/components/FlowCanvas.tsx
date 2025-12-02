@@ -150,17 +150,22 @@ export default function FlowCanvas({
     return Math.max(CANVAS_MIN_POSITION, Math.min(CANVAS_MAX_POSITION, position))
   }
 
-  // Snap position to nearest ticker (1% intervals)
+  // Snap position to nearest ticker (0.1% intervals)
   const snapToTicker = (position: number): number => {
-    const tickerPosition = Math.round(position)
+    // Round to nearest 0.1%
+    const tickerPosition = Math.round(position * 10) / 10
     return Math.max(CANVAS_MIN_POSITION, Math.min(CANVAS_MAX_POSITION, tickerPosition))
   }
 
-  // Generate ticker positions - smaller every 1%, larger every 5%, starting from -10%
+  // Generate ticker positions - smaller every 0.1%, larger every 1%, starting from -10%
   const getTickerPositions = (): Array<{ position: number; isMajor: boolean }> => {
     const tickers: Array<{ position: number; isMajor: boolean }> = []
-    for (let i = -10; i <= 110; i += 1) {
-      tickers.push({ position: i, isMajor: i % 5 === 0 })
+    // Generate tickers every 0.1% from -10% to 110%
+    for (let i = -100; i <= 1100; i += 1) {
+      const position = i / 10
+      // Major tickers every 1% (when position is a whole number)
+      const isMajor = i % 10 === 0
+      tickers.push({ position, isMajor })
     }
     return tickers
   }
@@ -449,9 +454,9 @@ export default function FlowCanvas({
     // Verify the snapped position is still to the right by comparing x coordinates
     const snappedX = getStageX(newPosition)
     if (snappedX <= fromStageX + EPSILON_X) {
-      // Snapping moved it back - find the next ticker to the right
+      // Snapping moved it back - find the next ticker to the right (0.1% increment)
       const fromPosition = fromStage.position
-      const nextTicker = Math.floor(fromPosition) + 1
+      const nextTicker = Math.floor(fromPosition * 10) / 10 + 0.1
       newPosition = Math.min(nextTicker, CANVAS_MAX_POSITION)
       
       // Final verification using x coordinates
@@ -661,9 +666,8 @@ export default function FlowCanvas({
           Click on the canvas to create a new marker, or click an existing marker to connect
         </div>
       )}
-      {/* Zoom lock/unlock button */}
-      <button
-        onClick={() => setIsZoomLocked(!isZoomLocked)}
+      {/* Zoom control pill */}
+      <div
         style={{
           position: 'absolute',
           top: '1rem',
@@ -671,66 +675,81 @@ export default function FlowCanvas({
           zIndex: 1000,
           background: 'white',
           border: '1px solid #e2e8f0',
-          borderRadius: '6px',
-          padding: '8px',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          borderRadius: '9999px',
+          padding: '0.375rem 0.75rem',
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-          transition: 'all 0.2s',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#f7fafc'
-          e.currentTarget.style.borderColor = '#cbd5e0'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'white'
-          e.currentTarget.style.borderColor = '#e2e8f0'
-        }}
-        title={isZoomLocked ? 'Unlock zoom' : 'Lock zoom'}
-      >
-        {isZoomLocked ? (
-          <Lock size={18} color="#4a5568" />
-        ) : (
-          <Unlock size={18} color="#4a5568" />
-        )}
-      </button>
-      {/* Reset view button */}
-      <button
-        onClick={() => {
-          setZoom(1)
-          // Reset to initial view where -1% is at the left border
-          const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasWidth
-          setPan({ x: -minusOnePercentX, y: 0 })
-        }}
-        style={{
-          position: 'absolute',
-          top: '1rem',
-          right: '4rem',
-          zIndex: 1000,
-          background: 'white',
-          border: '1px solid #e2e8f0',
-          borderRadius: '6px',
-          padding: '8px',
-          cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+          gap: '0.75rem',
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = '#f7fafc'
-          e.currentTarget.style.borderColor = '#cbd5e0'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'white'
-          e.currentTarget.style.borderColor = '#e2e8f0'
-        }}
-        title="Reset view to default"
       >
-        <RotateCcw size={18} color="#4a5568" />
-      </button>
+        <button
+          onClick={() => setIsZoomLocked(!isZoomLocked)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '4px',
+            borderRadius: '4px',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#f7fafc'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+          }}
+          title={isZoomLocked ? 'Unlock zoom' : 'Lock zoom'}
+        >
+          {isZoomLocked ? (
+            <Lock size={18} color="#4a5568" />
+          ) : (
+            <Unlock size={18} color="#4a5568" />
+          )}
+        </button>
+        <span
+          style={{
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#4a5568',
+          }}
+        >
+          Zoom: {(zoom * 100).toFixed(0)}%
+        </span>
+        <button
+          onClick={() => {
+            setZoom(1)
+            // Reset to initial view where -1% is at the left border
+            if (canvasRef.current) {
+              const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasRef.current.offsetWidth * 10
+              setPan({ x: -minusOnePercentX, y: 0 })
+            }
+          }}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '4px',
+            borderRadius: '4px',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = '#f7fafc'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+          }}
+          title="Reset zoom to 100%"
+        >
+          <RotateCcw size={18} color="#4a5568" />
+        </button>
+      </div>
       <div ref={canvasRef} className="flow-canvas" style={{ height: canvasHeight }}>
         <svg
           ref={svgRef}
@@ -822,6 +841,7 @@ export default function FlowCanvas({
             
             // Determine label interval based on zoom level
             // Higher zoom = show more labels, lower zoom = show fewer labels
+            // With 0.1% resolution, adjust intervals accordingly
             let labelInterval = 10 // Default: show labels every 10%
             if (zoom >= 2) {
               labelInterval = 1 // Very zoomed in: show every 1%
@@ -835,8 +855,9 @@ export default function FlowCanvas({
               labelInterval = 20 // Very zoomed out: show every 20%
             }
             
-            // Show label if position is a multiple of labelInterval
-            const shouldShowLabel = Math.abs(position % labelInterval) < 0.01 || Math.abs(position % labelInterval - labelInterval) < 0.01
+            // Show label if position is a multiple of labelInterval (with 0.1% precision)
+            const remainder = Math.abs(position % labelInterval)
+            const shouldShowLabel = remainder < 0.05 || Math.abs(remainder - labelInterval) < 0.05
             
             return (
               <g key={`ticker-${position}`} className="ticker">
@@ -877,7 +898,7 @@ export default function FlowCanvas({
                           fontWeight="500"
                           className="ticker-label"
                         >
-                          {position}%
+                          {position.toFixed(1)}%
                         </text>
                       )}
                     </>
