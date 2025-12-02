@@ -19,6 +19,7 @@ interface StageMarkerProps {
   minX?: number // Minimum x position based on parent nodes
   canvasWidth?: number
   canvasHeight?: number
+  hideLabel?: boolean // If true, don't render the label (for separate label rendering)
 }
 
 export default function StageMarker({ 
@@ -36,7 +37,8 @@ export default function StageMarker({
   incomingFlowPositions = [],
   minX = 0,
   canvasWidth = 1200,
-  canvasHeight = 600
+  canvasHeight = 600,
+  hideLabel = false
 }: StageMarkerProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editName, setEditName] = useState(stage.name)
@@ -440,20 +442,22 @@ export default function StageMarker({
       </text>
 
       {/* Label background - width fits text */}
-      <rect
-        x={-labelWidth / 2}
-        y={bottomY + 10}
-        width={labelWidth}
-        height={isSelected ? 30 : 20}
-        fill="white"
-        stroke={isSelected ? '#667eea' : '#e2e8f0'}
-        strokeWidth={isSelected ? 2 : 1}
-        rx={4}
-        className="label-background"
-      />
+      {!hideLabel && (
+        <rect
+          x={-labelWidth / 2}
+          y={bottomY + 10}
+          width={labelWidth}
+          height={isSelected ? 30 : 20}
+          fill="white"
+          stroke={isSelected ? '#667eea' : '#e2e8f0'}
+          strokeWidth={isSelected ? 2 : 1}
+          rx={4}
+          className="label-background"
+        />
+      )}
 
       {/* Editable label with delete icon when selected */}
-      {isSelected ? (
+      {!hideLabel && isSelected ? (
         <foreignObject x={-labelWidth / 2} y={bottomY + 10} width={labelWidth} height={30}>
           <div
             ref={labelContainerRef}
@@ -543,7 +547,7 @@ export default function StageMarker({
             )}
           </div>
         </foreignObject>
-      ) : isEditing ? (
+      ) : !hideLabel && isEditing ? (
         <foreignObject x={-labelWidth / 2} y={bottomY + 10} width={labelWidth} height={30}>
           <input
             ref={inputRef}
@@ -557,7 +561,7 @@ export default function StageMarker({
             style={{ width: '100%' }}
           />
         </foreignObject>
-      ) : (
+      ) : !hideLabel ? (
         <text
           x={0}
           y={bottomY + 25}
@@ -571,7 +575,7 @@ export default function StageMarker({
         >
           {stage.name}
         </text>
-      )}
+      ) : null}
     </g>
   )
 }

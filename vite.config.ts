@@ -7,5 +7,22 @@ export default defineConfig({
   server: {
     port: 9547,
   },
+  optimizeDeps: {
+    exclude: ['sql.js'],
+  },
+  assetsInclude: ['**/*.wasm'],
+  build: {
+    rollupOptions: {
+      output: {
+        // Ensure WASM files are handled correctly
+        assetFileNames: (assetInfo) => {
+          if (assetInfo.name && assetInfo.name.endsWith('.wasm')) {
+            return 'assets/[name][extname]'
+          }
+          return 'assets/[name]-[hash][extname]'
+        },
+      },
+    },
+  },
 })
 

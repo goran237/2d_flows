@@ -14,8 +14,9 @@ interface FlowCanvasProps {
 }
 
 // Canvas height will be calculated based on viewport
-const MIN_MARKER_HEIGHT = 120 // Minimum node height (3x the original 40)
-const HEIGHT_SCALE = 2 // Pixels per unit of flow value
+const MIN_MARKER_HEIGHT = 480 // Minimum node height (4x the previous 120)
+const HEIGHT_SCALE = 8 // Pixels per unit of flow value (4x the previous 2)
+const FLOW_SPACING = 8 // Spacing between flows (4x the previous 2)
 
 export default function FlowCanvas({
   stages,
@@ -611,16 +612,16 @@ export default function FlowCanvas({
     const outgoingFlows = flows.filter(f => f.fromStageId === stageId)
     
     // Calculate the sum of all incoming flow widths
-    // Flow width = flow.value * 2 (same calculation as in flow rendering)
-    // Spacing between flows = 2px (same as in flow rendering)
+    // Flow width = flow.value * 8 (4x scaling)
+    // Spacing between flows = 8px (4x scaling)
     let incomingHeight = 0
     for (let i = 0; i < incomingFlows.length; i++) {
       const flow = incomingFlows[i]
-      const flowWidth = Math.max(5, flow.value * 2) // Same as flow rendering
+      const flowWidth = Math.max(20, flow.value * HEIGHT_SCALE) // 4x minimum and scale
       incomingHeight += flowWidth
       // Add spacing between flows (but not after the last one)
       if (i < incomingFlows.length - 1) {
-        incomingHeight += 2
+        incomingHeight += FLOW_SPACING
       }
     }
     
@@ -628,11 +629,11 @@ export default function FlowCanvas({
     let outgoingHeight = 0
     for (let i = 0; i < outgoingFlows.length; i++) {
       const flow = outgoingFlows[i]
-      const flowWidth = Math.max(5, flow.value * 2) // Same as flow rendering
+      const flowWidth = Math.max(20, flow.value * HEIGHT_SCALE) // 4x minimum and scale
       outgoingHeight += flowWidth
       // Add spacing between flows (but not after the last one)
       if (i < outgoingFlows.length - 1) {
-        outgoingHeight += 2
+        outgoingHeight += FLOW_SPACING
       }
     }
     
@@ -1010,7 +1011,7 @@ export default function FlowCanvas({
             const toNodeTop = toY - toNodeHeight / 2
 
             // Calculate flow width based on value (Sankey diagram)
-            const flowWidth = Math.max(5, flow.value * 2) // Minimum 5px width
+            const flowWidth = Math.max(20, flow.value * HEIGHT_SCALE) // 4x minimum and scale
 
             // Calculate vertical position for flows from same source
             // Flows should stack from top to bottom within the source node
@@ -1022,7 +1023,7 @@ export default function FlowCanvas({
             let sourceOffset = 0
             const currentIndex = flowsFromSameSource.findIndex(f => f.id === flow.id)
             for (let i = 0; i < currentIndex; i++) {
-              sourceOffset += (flowsFromSameSource[i].value * 2) + 2 // Flow width + spacing
+              sourceOffset += (flowsFromSameSource[i].value * HEIGHT_SCALE) + FLOW_SPACING // Flow width + spacing
             }
             
             // Position flow center relative to node top
@@ -1042,7 +1043,7 @@ export default function FlowCanvas({
             let targetOffset = 0
             const targetIndex = flowsToSameTarget.findIndex(f => f.id === flow.id)
             for (let i = 0; i < targetIndex; i++) {
-              targetOffset += (flowsToSameTarget[i].value * 2) + 2
+              targetOffset += (flowsToSameTarget[i].value * HEIGHT_SCALE) + FLOW_SPACING
             }
             
             // Position flow center relative to node top
@@ -1068,23 +1069,12 @@ export default function FlowCanvas({
                   onClick={(e: React.MouseEvent) => handleFlowClick(flow.id, e)}
                   style={{ pointerEvents: selectedFlowId === flow.id && editingFlow?.id === flow.id ? 'none' : 'auto' }}
                 />
-                {/* Debug: Show flow width */}
-                <text
-                  x={(exitPointX + entryPointX) / 2}
-                  y={targetFlowCenter - flowWidth / 2 - 15}
-                  textAnchor="middle"
-                  fill="#ef4444"
-                  fontSize="10"
-                  fontWeight="600"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  Flow: {flowWidth.toFixed(1)}px
-                </text>
               </g>
             )
           })}
 
           {/* Render stage markers */}
+          {/* Render markers without labels first */}
           {sortedStages.map(stage => {
             const minX = getMinXForStage(stage.id)
             const stageY = getStageY(stage)
@@ -1107,10 +1097,10 @@ export default function FlowCanvas({
               // Calculate cumulative offset from top of node (same as flow rendering)
               let targetOffset = 0
               const targetIndex = flowsToSameTarget.findIndex(f => f.id === flow.id)
-              const flowWidth = Math.max(5, flow.value * 2) // Minimum 5px width (same as flow rendering)
+              const flowWidth = Math.max(20, flow.value * HEIGHT_SCALE) // 4x minimum and scale
               
               for (let i = 0; i < targetIndex; i++) {
-                targetOffset += (flowsToSameTarget[i].value * 2) + 2 // Flow width + spacing (same as flow rendering)
+                targetOffset += (flowsToSameTarget[i].value * HEIGHT_SCALE) + FLOW_SPACING // Flow width + spacing (same as flow rendering)
               }
               
               // Calculate node top edge (same as flow rendering)
@@ -1158,18 +1148,6 @@ export default function FlowCanvas({
             
             return (
               <g key={`marker-wrapper-${stage.id}`}>
-                {/* Debug: Show marker height above marker */}
-                <text
-                  x={getStageX(stage.position)}
-                  y={stageY - nodeHeight / 2 - 20}
-                  textAnchor="middle"
-                  fill="#ef4444"
-                  fontSize="10"
-                  fontWeight="600"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  H: {nodeHeight.toFixed(1)}px
-                </text>
                 <StageMarker
                   key={stage.id}
                   x={getStageX(stage.position)}
@@ -1187,10 +1165,66 @@ export default function FlowCanvas({
                   minX={minX}
                   canvasWidth={canvasWidth}
                   canvasHeight={canvasHeight}
+                  hideLabel={selectedStageId !== stage.id}
                 />
               </g>
             )
           })}
+          
+          {/* Render all labels in a separate group after markers so they appear on top (only for non-selected markers) */}
+          <g key="marker-labels">
+            {sortedStages
+              .filter(stage => selectedStageId !== stage.id) // Only render labels for non-selected markers
+              .map(stage => {
+                const stageY = getStageY(stage)
+                const nodeHeight = getNodeHeight(stage.id)
+                const bottomY = stageY + nodeHeight / 2
+                
+                // Calculate label width (approximate based on text length)
+                const textLength = stage.name.length
+                const labelWidth = Math.max(40, textLength * 8 + 16)
+                
+                return (
+                  <g 
+                    key={`label-${stage.id}`} 
+                    transform={`translate(${getStageX(stage.position)}, 0)`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleStageClick(stage)
+                    }}
+                  >
+                    {/* Label background */}
+                    <rect
+                      x={-labelWidth / 2}
+                      y={bottomY + 10}
+                      width={labelWidth}
+                      height={20}
+                      fill="white"
+                      stroke="#e2e8f0"
+                      strokeWidth={1}
+                      rx={4}
+                      style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                    />
+                    {/* Label text */}
+                    <text
+                      x={0}
+                      y={bottomY + 25}
+                      textAnchor="middle"
+                      fill="#1a202c"
+                      fontSize="13"
+                      fontWeight="500"
+                      style={{ cursor: 'text', pointerEvents: 'all' }}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation()
+                        handleStageClick(stage)
+                      }}
+                    >
+                      {stage.name}
+                    </text>
+                  </g>
+                )
+              })}
+          </g>
           
           {/* Render flow edit form after markers so it appears on top */}
           {flows.map(flow => {
@@ -1209,7 +1243,7 @@ export default function FlowCanvas({
             const toNodeHeight = getNodeHeight(toStage.id)
             const fromNodeTop = fromY - fromNodeHeight / 2
             const toNodeTop = toY - toNodeHeight / 2
-            const flowWidth = Math.max(5, flow.value * 2)
+            const flowWidth = Math.max(20, flow.value * HEIGHT_SCALE)
             
             const flowsFromSameSource = flows
               .filter(f => f.fromStageId === flow.fromStageId)
@@ -1218,7 +1252,7 @@ export default function FlowCanvas({
             let sourceOffset = 0
             const currentIndex = flowsFromSameSource.findIndex(f => f.id === flow.id)
             for (let i = 0; i < currentIndex; i++) {
-              sourceOffset += (flowsFromSameSource[i].value * 2) + 2
+              sourceOffset += (flowsFromSameSource[i].value * HEIGHT_SCALE) + FLOW_SPACING
             }
             const sourceFlowCenter = fromNodeTop + sourceOffset + flowWidth / 2
 
@@ -1229,7 +1263,7 @@ export default function FlowCanvas({
             let targetOffset = 0
             const targetIndex = flowsToSameTarget.findIndex(f => f.id === flow.id)
             for (let i = 0; i < targetIndex; i++) {
-              targetOffset += (flowsToSameTarget[i].value * 2) + 2
+              targetOffset += (flowsToSameTarget[i].value * HEIGHT_SCALE) + FLOW_SPACING
             }
             const targetFlowCenter = toNodeTop + targetOffset + flowWidth / 2
 
