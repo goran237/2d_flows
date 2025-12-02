@@ -236,7 +236,12 @@ export default function FlowCanvas({
       } else {
         // Select flow and start editing
         setSelectedFlowId(flowId)
-        setEditingFlow({ ...flow })
+        // Convert actual flow value to percentage of parent's incoming flow for editing
+        const parentIncomingValue = getIncomingFlowValue(flow.fromStageId, flows)
+        const percentageValue = parentIncomingValue > 0 
+          ? (flow.value / parentIncomingValue) * 100 
+          : 0
+        setEditingFlow({ ...flow, value: percentageValue })
         // Clear stage selection when selecting flow
         setSelectedStageId(null)
         setIsCreatingBranch(false)
@@ -277,12 +282,19 @@ export default function FlowCanvas({
   const handleFlowUpdate = () => {
     if (!editingFlow) return
     
-    // Update the flow with user's changes
-    let updatedFlows = flows.map(f => f.id === editingFlow.id ? editingFlow : f)
-    
     // Get the source stage of the updated flow
     const sourceStageId = editingFlow.fromStageId
-    const incomingValue = getIncomingFlowValue(sourceStageId, updatedFlows)
+    const incomingValue = getIncomingFlowValue(sourceStageId, flows)
+    
+    // Convert percentage input to actual flow value
+    // The editingFlow.value is a percentage (0-100) of the parent's incoming flow
+    const actualFlowValue = (editingFlow.value / 100) * incomingValue
+    // Clamp to valid range
+    const clampedFlowValue = Math.max(0, Math.min(actualFlowValue, incomingValue))
+    
+    // Update the flow with the converted actual value
+    const flowWithActualValue = { ...editingFlow, value: clampedFlowValue }
+    let updatedFlows = flows.map(f => f.id === editingFlow.id ? flowWithActualValue : f)
     
     // Get all outgoing flows from the same source
     const outgoingFlows = updatedFlows.filter(f => f.fromStageId === sourceStageId)
@@ -293,7 +305,7 @@ export default function FlowCanvas({
       const otherFlowsSum = otherFlows.reduce((sum, f) => sum + f.value, 0)
       
       // Calculate remaining value for other flows
-      const remainingValue = Math.max(0, incomingValue - editingFlow.value)
+      const remainingValue = Math.max(0, incomingValue - clampedFlowValue)
       
       // If there are other flows, adjust them proportionally
       if (otherFlows.length > 0 && remainingValue > 0) {
@@ -320,7 +332,7 @@ export default function FlowCanvas({
     updatedFlows = balanceFlows(updatedFlows)
     
     // Re-apply the user's change after balancing (in case balanceFlows reset it)
-    updatedFlows = updatedFlows.map(f => f.id === editingFlow.id ? editingFlow : f)
+    updatedFlows = updatedFlows.map(f => f.id === editingFlow.id ? flowWithActualValue : f)
     
     // Re-balance other flows again after preserving user's change
     const finalSourceStageId = editingFlow.fromStageId
@@ -330,7 +342,7 @@ export default function FlowCanvas({
     if (finalOutgoingFlows.length > 1) {
       const finalOtherFlows = finalOutgoingFlows.filter(f => f.id !== editingFlow.id)
       const finalOtherFlowsSum = finalOtherFlows.reduce((sum, f) => sum + f.value, 0)
-      const finalRemainingValue = Math.max(0, finalIncomingValue - editingFlow.value)
+      const finalRemainingValue = Math.max(0, finalIncomingValue - clampedFlowValue)
       
       if (finalOtherFlows.length > 0 && finalRemainingValue > 0 && finalOtherFlowsSum > 0) {
         const finalScaleFactor = finalRemainingValue / finalOtherFlowsSum
@@ -1311,8 +1323,10 @@ export default function FlowCanvas({
                       fontSize: '14px',
                       width: '100%',
                     }}
-                    min="1"
-                    placeholder="Flow value"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    placeholder="Percentage (0-100)"
                   />
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                     <button

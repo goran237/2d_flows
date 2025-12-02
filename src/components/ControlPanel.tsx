@@ -102,7 +102,65 @@ export default function ControlPanel({
   }
 
   const updateFlow = (id: string, updates: Partial<Flow>) => {
-    onFlowsChange(flows.map(f => f.id === id ? { ...f, ...updates } : f))
+    // Find the flow being updated
+    const flowToUpdate = flows.find(f => f.id === id)
+    if (!flowToUpdate) return
+    
+    // Get the source stage (parent) of the updated flow
+    const sourceStageId = updates.fromStageId || flowToUpdate.fromStageId
+    const incomingValue = getIncomingFlowValue(sourceStageId)
+    
+    // Convert percentage input to actual flow value
+    let actualFlowValue = updates.value
+    if (updates.value !== undefined) {
+      // The input value is a percentage (0-100) of the parent's incoming flow
+      actualFlowValue = (updates.value / 100) * incomingValue
+      // Clamp to valid range
+      actualFlowValue = Math.max(0, Math.min(actualFlowValue, incomingValue))
+    }
+    
+    // Apply the updates with the converted actual value
+    const updatedFlow = { ...flowToUpdate, ...updates, value: actualFlowValue !== undefined ? actualFlowValue : flowToUpdate.value }
+    
+    // Start with the updated flow
+    let updatedFlows = flows.map(f => f.id === id ? updatedFlow : f)
+    
+    // If the value was changed, recalculate sibling flows
+    if (updates.value !== undefined && actualFlowValue !== undefined) {
+      // Get all outgoing flows from the same source (siblings)
+      const siblingFlows = updatedFlows.filter(f => f.fromStageId === sourceStageId)
+      
+      if (siblingFlows.length > 1) {
+        // Calculate the sum of all other flows (excluding the one being updated)
+        const otherFlows = siblingFlows.filter(f => f.id !== id)
+        const otherFlowsSum = otherFlows.reduce((sum, f) => sum + f.value, 0)
+        
+        // Calculate remaining value for other flows
+        const remainingValue = Math.max(0, incomingValue - actualFlowValue)
+        
+        // If there are other flows, adjust them proportionally
+        if (otherFlows.length > 0 && remainingValue > 0 && otherFlowsSum > 0) {
+          // Distribute remaining value proportionally among other flows
+          const scaleFactor = remainingValue / otherFlowsSum
+          updatedFlows = updatedFlows.map(flow => {
+            if (flow.fromStageId === sourceStageId && flow.id !== id) {
+              return { ...flow, value: flow.value * scaleFactor }
+            }
+            return flow
+          })
+        } else if (otherFlows.length > 0 && remainingValue <= 0) {
+          // If the user set a value that's too high, set others to minimum
+          updatedFlows = updatedFlows.map(flow => {
+            if (flow.fromStageId === sourceStageId && flow.id !== id) {
+              return { ...flow, value: 0.01 } // Minimum value
+            }
+            return flow
+          })
+        }
+      }
+    }
+    
+    onFlowsChange(updatedFlows)
     setEditingFlow(null)
   }
 
@@ -268,8 +326,10 @@ export default function ControlPanel({
                           setEditingFlow({ ...editingFlow, value: Number(e.target.value) })
                         }
                         className="edit-input"
-                        min="1"
-                        placeholder="Flow value"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        placeholder="Percentage (0-100)"
                       />
                       <input
                         type="color"
@@ -306,7 +366,14 @@ export default function ControlPanel({
                       <div className="item-actions">
                         <button
                           className="icon-button"
-                          onClick={() => setEditingFlow(flow)}
+                          onClick={() => {
+                            // Convert actual flow value to percentage of parent's incoming flow for editing
+                            const parentIncomingValue = getIncomingFlowValue(flow.fromStageId)
+                            const percentageValue = parentIncomingValue > 0 
+                              ? (flow.value / parentIncomingValue) * 100 
+                              : 0
+                            setEditingFlow({ ...flow, value: percentageValue })
+                          }}
                         >
                           <Edit2 size={16} />
                         </button>
