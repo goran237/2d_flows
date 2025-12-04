@@ -62,20 +62,6 @@ export default function FlowPath({
         strokeWidth="1"
         className="sankey-flow"
       />
-      {label && (
-        <text
-          x={midX}
-          y={midY - halfWidth - 5}
-          textAnchor="middle"
-          className="flow-label"
-          fill="#4a5568"
-          fontSize="11"
-          fontWeight="500"
-          pointerEvents="none"
-        >
-          {label}
-        </text>
-      )}
       {value !== undefined && (
         <text
           x={midX}
@@ -88,6 +74,20 @@ export default function FlowPath({
           pointerEvents="none"
         >
           {value.toFixed(2)}%
+        </text>
+      )}
+      {label && (
+        <text
+          x={midX}
+          y={midY - 12}
+          textAnchor="middle"
+          className="flow-label"
+          fill="#4a5568"
+          fontSize="11"
+          fontWeight="500"
+          pointerEvents="none"
+        >
+          {label}
         </text>
       )}
     </g>

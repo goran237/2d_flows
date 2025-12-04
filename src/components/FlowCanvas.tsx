@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Stage, Flow } from '../types'
 import StageMarker from './StageMarker'
 import FlowPath from './FlowPath'
-import { Lock, Unlock, RotateCcw, Check, X, Trash2, GitBranch } from 'lucide-react'
+import { Lock, Unlock, RotateCcw, Check, X, Trash2, GitBranch, Link } from 'lucide-react'
 import './FlowCanvas.css'
 
 interface FlowCanvasProps {
@@ -1435,7 +1435,7 @@ export default function FlowCanvas({
                 x={midX - 160}
                 y={midY - 90}
                 width="320"
-                height="180"
+                height="200"
                 style={{ pointerEvents: 'all', overflow: 'visible' }}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
@@ -1466,6 +1466,18 @@ export default function FlowCanvas({
                     minHeight: 'fit-content',
                   }}
                 >
+                  <div
+                    style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#1a202c',
+                      marginBottom: '4px',
+                      paddingBottom: '8px',
+                      borderBottom: '1px solid #e2e8f0',
+                    }}
+                  >
+                    Flow
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <label
                       style={{
@@ -1669,7 +1681,7 @@ export default function FlowCanvas({
             
             // Modal dimensions
             const modalWidth = 320
-            const modalHeight = isRootMarker ? 200 : 220
+            const modalHeight = isRootMarker ? 220 : 240
             const modalPadding = 20
             
             // Calculate position ensuring modal stays within canvas bounds
@@ -1731,6 +1743,18 @@ export default function FlowCanvas({
                     minHeight: 'fit-content',
                   }}
                 >
+                  <div
+                    style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#1a202c',
+                      marginBottom: '4px',
+                      paddingBottom: '8px',
+                      borderBottom: '1px solid #e2e8f0',
+                    }}
+                  >
+                    Stage
+                  </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <label
                       style={{
@@ -1865,6 +1889,38 @@ export default function FlowCanvas({
                         <Trash2 size={16} />
                       </button>
                     )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedStageId(editingStage.id)
+                        setIsCreatingBranch(true)
+                        setEditingStage(null)
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Link to another marker"
+                      style={{
+                        padding: '8px',
+                        background: '#dbeafe',
+                        color: '#2563eb',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#bfdbfe'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#dbeafe'
+                        e.currentTarget.style.transform = 'scale(1)'
+                      }}
+                    >
+                      <Link size={16} />
+                    </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()

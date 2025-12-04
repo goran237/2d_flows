@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import FlowCanvas from './components/FlowCanvas'
 import { Stage, Flow } from './types'
-import { Undo2, Save } from 'lucide-react'
+import { Undo2, Save, Check, X, AlertCircle } from 'lucide-react'
 import './App.css'
 
 // Dynamic import to avoid blocking app startup if database fails
@@ -69,6 +69,7 @@ function App() {
   const [flows, setFlows] = useState<Flow[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const historyRef = useRef<HistoryState[]>([])
   const historyIndexRef = useRef<number>(-1)
@@ -123,12 +124,12 @@ function App() {
       await db.saveAll(stages, flows)
       console.log('Data saved successfully')
       
-      // Show success feedback (you could add a toast notification here)
-      alert('Data saved successfully!')
+      // Show success notification
+      setNotification({ type: 'success', message: 'Data saved successfully!' })
     } catch (error: any) {
       console.error('Failed to save data to database:', error)
       const errorMessage = error?.message || 'Unknown error occurred'
-      alert(`Failed to save data: ${errorMessage}\n\nCheck the console for more details.`)
+      setNotification({ type: 'error', message: `Failed to save data: ${errorMessage}\n\nCheck the console for more details.` })
     } finally {
       setIsSaving(false)
     }
@@ -329,6 +330,149 @@ function App() {
           onStagesChangeNoHistory={handleStagesChangeNoHistory}
         />
       </div>
+      
+      {/* Notification Modal */}
+      {notification && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+          }}
+          onClick={() => setNotification(null)}
+        >
+          <div
+            style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '12px',
+              padding: '24px',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.1)',
+              maxWidth: '400px',
+              width: '90%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              {notification.type === 'success' ? (
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: '#d1fae5',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Check size={24} color="#059669" />
+                </div>
+              ) : (
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: '#fee2e2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <AlertCircle size={24} color="#dc2626" />
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    color: '#1a202c',
+                    marginBottom: '4px',
+                  }}
+                >
+                  {notification.type === 'success' ? 'Success' : 'Error'}
+                </h3>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '14px',
+                    color: '#64748b',
+                    whiteSpace: 'pre-line',
+                  }}
+                >
+                  {notification.message}
+                </p>
+              </div>
+              <button
+                onClick={() => setNotification(null)}
+                style={{
+                  padding: '8px',
+                  background: '#f1f5f9',
+                  color: '#64748b',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s',
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = '#e2e8f0'
+                  e.currentTarget.style.transform = 'scale(1.05)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = '#f1f5f9'
+                  e.currentTarget.style.transform = 'scale(1)'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <button
+              onClick={() => setNotification(null)}
+              style={{
+                padding: '10px 20px',
+                background: notification.type === 'success' ? '#667eea' : '#ef4444',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                transition: 'all 0.2s',
+                alignSelf: 'flex-end',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '0.9'
+                e.currentTarget.style.transform = 'scale(1.02)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.transform = 'scale(1)'
+              }}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

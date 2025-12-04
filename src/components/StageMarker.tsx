@@ -47,6 +47,7 @@ export default function StageMarker({
   const [dragStartY, setDragStartY] = useState(0)
   const [dragStartPosition, setDragStartPosition] = useState(0)
   const [dragStartYPosition, setDragStartYPosition] = useState(0)
+  const [hasDragged, setHasDragged] = useState(false)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null)
   const [labelWidth, setLabelWidth] = useState(100)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -144,7 +145,7 @@ export default function StageMarker({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (!isDragging) {
+    if (!isDragging && !hasDragged) {
       onClick?.(stage)
       // Don't auto-start editing - user must click input field
     }
@@ -204,6 +205,7 @@ export default function StageMarker({
     if (isEditing) return
     e.stopPropagation()
     setIsDragging(true)
+    setHasDragged(false)
     setDragStartX(e.clientX)
     setDragStartY(e.clientY)
     setDragStartPosition(stage.position)
@@ -216,6 +218,11 @@ export default function StageMarker({
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - dragStartX
       const deltaY = e.clientY - dragStartY
+      
+      // If mouse moved more than 5 pixels, consider it a drag
+      if (Math.abs(deltaX) > 5 || Math.abs(deltaY) > 5) {
+        setHasDragged(true)
+      }
       
       // Calculate new horizontal position
       const deltaPosition = (deltaX / canvasWidth) * 100
@@ -235,6 +242,10 @@ export default function StageMarker({
 
     const handleMouseUp = () => {
       setIsDragging(false)
+      // Reset hasDragged after a short delay to prevent click from firing
+      setTimeout(() => {
+        setHasDragged(false)
+      }, 100)
     }
 
     document.addEventListener('mousemove', handleMouseMove)
