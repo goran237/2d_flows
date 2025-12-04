@@ -41,7 +41,7 @@ export default function FlowCanvas({
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
-  const [isZoomLocked, setIsZoomLocked] = useState(true) // Locked by default
+  const [isZoomLocked, setIsZoomLocked] = useState(false) // Unlocked by default
 
   useEffect(() => {
     const updateSize = () => {
@@ -66,32 +66,6 @@ export default function FlowCanvas({
     window.addEventListener('resize', updateSize)
     return () => window.removeEventListener('resize', updateSize)
   }, [])
-
-  // Handle mouse wheel zoom
-  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
-    if (isZoomLocked) {
-      return // Don't zoom if locked
-    }
-    e.preventDefault()
-    const delta = e.deltaY > 0 ? 0.9 : 1.1
-    const newZoom = Math.max(0.1, Math.min(3, zoom * delta))
-    
-    if (svgRef.current) {
-      const rect = svgRef.current.getBoundingClientRect()
-      const mouseX = e.clientX - rect.left
-      const mouseY = e.clientY - rect.top
-      
-      // Zoom towards mouse position
-      const zoomPointX = (mouseX - pan.x) / zoom
-      const zoomPointY = (mouseY - pan.y) / zoom
-      
-      const newPanX = mouseX - zoomPointX * newZoom
-      const newPanY = mouseY - zoomPointY * newZoom
-      
-      setZoom(newZoom)
-      setPan({ x: newPanX, y: newPanY })
-    }
-  }
 
   // Handle pan start
   const handlePanStart = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -590,20 +564,6 @@ export default function FlowCanvas({
     return stage.yPosition ?? canvasHeight / 2
   }
 
-  // Calculate node weight (total flow through the node)
-  const getNodeWeight = (stageId: string): number => {
-    // Sum of all incoming flow values
-    const incomingFlows = flows.filter(f => f.toStageId === stageId)
-    const incomingTotal = incomingFlows.reduce((sum, f) => sum + f.value, 0)
-    
-    // Sum of all outgoing flow values
-    const outgoingFlows = flows.filter(f => f.fromStageId === stageId)
-    const outgoingTotal = outgoingFlows.reduce((sum, f) => sum + f.value, 0)
-    
-    // Use the maximum of incoming or outgoing (Sankey convention)
-    return Math.max(incomingTotal, outgoingTotal, 10) // Minimum weight of 10
-  }
-
   // Calculate node height based on total flow value (proportional to root marker)
   const getNodeHeight = (stageId: string): number => {
     // Get all incoming flows
@@ -667,94 +627,132 @@ export default function FlowCanvas({
           Click on the canvas to create a new marker, or click an existing marker to connect
         </div>
       )}
-      {/* Zoom control pill */}
+      {/* Zoom controls */}
       <div
         style={{
           position: 'absolute',
           top: '1rem',
           right: '1rem',
           zIndex: 1000,
-          background: 'white',
-          border: '1px solid #e2e8f0',
-          borderRadius: '9999px',
-          padding: '0.375rem 0.75rem',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
           display: 'flex',
-          alignItems: 'center',
-          gap: '0.75rem',
+          flexDirection: 'column',
+          gap: '0.5rem',
+          alignItems: 'flex-end',
         }}
       >
-        <button
-          onClick={() => setIsZoomLocked(!isZoomLocked)}
+        {/* Zoom control pill */}
+        <div
           style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '9999px',
+            padding: '0.375rem 0.75rem',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            padding: '4px',
-            borderRadius: '4px',
-            transition: 'all 0.2s',
+            gap: '0.75rem',
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f7fafc'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
-          title={isZoomLocked ? 'Unlock zoom' : 'Lock zoom'}
         >
-          {isZoomLocked ? (
-            <Lock size={18} color="#4a5568" />
-          ) : (
-            <Unlock size={18} color="#4a5568" />
-          )}
-        </button>
-        <span
+          <button
+            onClick={() => setIsZoomLocked(!isZoomLocked)}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px',
+              borderRadius: '4px',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f7fafc'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+            }}
+            title={isZoomLocked ? 'Unlock zoom' : 'Lock zoom'}
+          >
+            {isZoomLocked ? (
+              <Lock size={18} color="#4a5568" />
+            ) : (
+              <Unlock size={18} color="#4a5568" />
+            )}
+          </button>
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: '500',
+              color: '#4a5568',
+            }}
+          >
+            Zoom: {(zoom * 100).toFixed(0)}%
+          </span>
+          <button
+            onClick={() => {
+              setZoom(1)
+              // Reset to initial view where -1% is at the left border
+              if (canvasRef.current) {
+                const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasRef.current.offsetWidth * 10
+                setPan({ x: -minusOnePercentX, y: 0 })
+              }
+            }}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '4px',
+              borderRadius: '4px',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f7fafc'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent'
+            }}
+            title="Reset zoom to 100%"
+          >
+            <RotateCcw size={18} color="#4a5568" />
+          </button>
+        </div>
+        {/* Zoom slider */}
+        <div
           style={{
-            fontSize: '14px',
-            fontWeight: '500',
-            color: '#4a5568',
+            background: 'white',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            padding: '0.5rem 0.75rem',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+            minWidth: '200px',
           }}
         >
-          Zoom: {(zoom * 100).toFixed(0)}%
-        </span>
-        <button
-          onClick={() => {
-            setZoom(1)
-            // Reset to initial view where -1% is at the left border
-            if (canvasRef.current) {
-              const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasRef.current.offsetWidth * 10
-              setPan({ x: -minusOnePercentX, y: 0 })
-            }
-          }}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '4px',
-            borderRadius: '4px',
-            transition: 'all 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = '#f7fafc'
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'transparent'
-          }}
-          title="Reset zoom to 100%"
-        >
-          <RotateCcw size={18} color="#4a5568" />
-        </button>
+          <input
+            type="range"
+            min="0.1"
+            max="3"
+            step="0.01"
+            value={zoom}
+            onChange={(e) => {
+              const newZoom = parseFloat(e.target.value)
+              setZoom(newZoom)
+            }}
+            disabled={isZoomLocked}
+            style={{
+              width: '100%',
+              cursor: isZoomLocked ? 'not-allowed' : 'pointer',
+              opacity: isZoomLocked ? 0.5 : 1,
+            }}
+          />
+        </div>
       </div>
       <div ref={canvasRef} className="flow-canvas" style={{ height: canvasHeight }}>
         <svg
           ref={svgRef}
-          onWheel={handleWheel}
           onMouseDown={handlePanStart}
           style={{ cursor: isPanning ? 'grabbing' : (isCreatingBranch ? 'crosshair' : 'grab') }}
           width={canvasWidth}
