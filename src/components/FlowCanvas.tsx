@@ -43,11 +43,25 @@ export default function FlowCanvas({
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [isZoomLocked, setIsZoomLocked] = useState(false) // Unlocked by default
 
+  // Canvas coordinate system: -10% to 110% (0% is not at left edge)
+  const CANVAS_MIN_POSITION = -10
+  const CANVAS_MAX_POSITION = 110
+  const CANVAS_RANGE = CANVAS_MAX_POSITION - CANVAS_MIN_POSITION // 120
+
   useEffect(() => {
     const updateSize = () => {
       if (canvasRef.current) {
+        // Get the container width (parent of canvasRef)
+        const container = canvasRef.current.parentElement
+        const containerWidth = container ? container.clientWidth - 64 : 1200 // Subtract padding (2rem * 2 = 64px)
+        
         // Multiply canvas width by 10 to increase x-axis scale 10x
-        setCanvasWidth(canvasRef.current.offsetWidth * 10)
+        const newCanvasWidth = containerWidth * 10
+        setCanvasWidth(newCanvasWidth)
+        
+        // Set the canvas div width to be wider than container to ensure scrollbar is always visible
+        canvasRef.current.style.width = `${newCanvasWidth}px`
+        
         // Calculate height to fit viewport (accounting for header ~80px and padding)
         const viewportHeight = window.innerHeight
         const headerHeight = 80
@@ -57,7 +71,7 @@ export default function FlowCanvas({
         
         // Set initial pan so that -1% is at the left border of the canvas
         // Calculate the SVG x coordinate of -1% position
-        const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasRef.current.offsetWidth * 10
+        const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * newCanvasWidth
         // To have -1% at left edge: pan.x = -minusOnePercentX * zoom (for zoom=1)
         setPan({ x: -minusOnePercentX, y: 0 })
       }
@@ -66,6 +80,18 @@ export default function FlowCanvas({
     window.addEventListener('resize', updateSize)
     return () => window.removeEventListener('resize', updateSize)
   }, [])
+
+  // Handle horizontal mouse wheel scrolling
+  const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    // Check if horizontal scrolling (shift+wheel or trackpad horizontal scroll)
+    if (e.shiftKey || Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      e.preventDefault()
+      const container = canvasRef.current?.parentElement
+      if (container) {
+        container.scrollLeft += e.deltaX || e.deltaY
+      }
+    }
+  }
 
   // Handle pan start
   const handlePanStart = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -106,11 +132,6 @@ export default function FlowCanvas({
       document.removeEventListener('mouseup', handlePanEnd)
     }
   }, [isPanning, panStart])
-
-  // Canvas coordinate system: -10% to 110% (0% is not at left edge)
-  const CANVAS_MIN_POSITION = -10
-  const CANVAS_MAX_POSITION = 110
-  const CANVAS_RANGE = CANVAS_MAX_POSITION - CANVAS_MIN_POSITION // 120
 
   const getStageX = (position: number) => {
     // Map position from [-10, 110] range to [0, canvasWidth]
@@ -156,11 +177,104 @@ export default function FlowCanvas({
     return incomingFlows.reduce((sum, f) => sum + f.value, 0)
   }
 
+  // Generate a similar but different color based on parent color
+  // childIndex: 0-based index of the child (0 = first child, 1 = second child, etc.)
+  const generateSimilarColor = (parentColor: string, childIndex: number = 0): string => {
+    // Default color if parent color is not provided
+    const defaultColor = '#667eea'
+    if (!parentColor || !parentColor.startsWith('#')) return defaultColor
+
+    // Parse hex color to RGB
+    const hex = parentColor.replace('#', '')
+    if (hex.length !== 6) return defaultColor
+    
+    const r = parseInt(hex.substring(0, 2), 16)
+    const g = parseInt(hex.substring(2, 4), 16)
+    const b = parseInt(hex.substring(4, 6), 16)
+    
+    // Validate parsed values
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return defaultColor
+
+    // Convert RGB to HSL
+    const rNorm = r / 255
+    const gNorm = g / 255
+    const bNorm = b / 255
+
+    const max = Math.max(rNorm, gNorm, bNorm)
+    const min = Math.min(rNorm, gNorm, bNorm)
+    let h = 0
+    let s = 0
+    const l = (max + min) / 2
+
+    if (max !== min) {
+      const d = max - min
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+
+      switch (max) {
+        case rNorm:
+          h = ((gNorm - bNorm) / d + (gNorm < bNorm ? 6 : 0)) / 6
+          break
+        case gNorm:
+          h = ((bNorm - rNorm) / d + 2) / 6
+          break
+        case bNorm:
+          h = ((rNorm - gNorm) / d + 4) / 6
+          break
+      }
+    }
+
+    // Rotate hue by a variable amount based on child index
+    // Base shift of 20 degrees, plus 25 degrees per child index
+    // This ensures each child has a distinct but similar color
+    const baseHueShift = 20 / 360 // Base 20 degrees
+    const perChildShift = 25 / 360 // 25 degrees per child
+    const hueShift = baseHueShift + (childIndex * perChildShift)
+    const newH = (h + hueShift) % 1
+    
+    // Vary saturation and lightness slightly based on child index for more distinction
+    const saturationVariation = 1 - (childIndex * 0.05) // Slightly reduce saturation for later children
+    const lightnessVariation = 1 + (childIndex * 0.03) // Slightly increase lightness for later children
+    const newS = Math.min(1, Math.max(0.3, s * 0.9 * saturationVariation))
+    const newL = Math.min(0.9, Math.max(0.3, l * 1.1 * lightnessVariation))
+
+    // Convert HSL back to RGB
+    let newR, newG, newB
+
+    if (newS === 0) {
+      newR = newG = newB = newL
+    } else {
+      const hue2rgb = (p: number, q: number, t: number) => {
+        if (t < 0) t += 1
+        if (t > 1) t -= 1
+        if (t < 1 / 6) return p + (q - p) * 6 * t
+        if (t < 1 / 2) return q
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+        return p
+      }
+
+      const q = newL < 0.5 ? newL * (1 + newS) : newL + newS - newL * newS
+      const p = 2 * newL - q
+
+      newR = hue2rgb(p, q, newH + 1 / 3)
+      newG = hue2rgb(p, q, newH)
+      newB = hue2rgb(p, q, newH - 1 / 3)
+    }
+
+    // Convert to hex
+    const toHex = (n: number) => {
+      const hex = Math.round(n * 255).toString(16)
+      return hex.length === 1 ? '0' + hex : hex
+    }
+
+    return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`
+  }
+
   // Create a new flow with proportional splitting
   const createFlowWithProportionalSplit = (
     fromStageId: string,
     toStageId: string,
-    existingFlows: Flow[]
+    existingFlows: Flow[],
+    flowColor?: string
   ): Flow[] => {
     // Get the incoming flow value to the source marker
     const incomingValue = getIncomingFlowValue(fromStageId)
@@ -193,7 +307,7 @@ export default function FlowCanvas({
       toStageId,
       value: proportionalValue,
       branchIndex,
-      color: '#667eea',
+      color: flowColor || '#667eea',
     }
     
     return [...updatedFlows, newFlow]
@@ -359,8 +473,10 @@ export default function FlowCanvas({
       if (selectedStage && stage.id !== selectedStage.id) {
         // Only create flow if clicked marker is to the right of the selected marker
         if (stage.position > selectedStage.position) {
+          // Use the target marker's color for the flow
+          const flowColor = stage.color || '#667eea'
           // Create flow from selected marker to clicked marker with proportional splitting
-          let updatedFlows = createFlowWithProportionalSplit(selectedStageId, stage.id, flows)
+          let updatedFlows = createFlowWithProportionalSplit(selectedStageId, stage.id, flows, flowColor)
           // Balance all flows to ensure outgoing = incoming for each stage
           updatedFlows = balanceFlows(updatedFlows)
           onFlowsChange(updatedFlows)
@@ -457,16 +573,29 @@ export default function FlowCanvas({
     // Allow markers to be created anywhere vertically, including below the ticker axis
     const newYPosition = clickY
     
+    // Get parent stage color and generate a similar color for the child
+    const parentStage = stages.find(s => s.id === selectedStageId)
+    const parentColor = parentStage?.color || '#667eea'
+    
+    // Count existing children of the parent to determine the child index
+    const existingChildren = stages.filter(s => {
+      const incomingFlow = flows.find(f => f.toStageId === s.id && f.fromStageId === selectedStageId)
+      return incomingFlow !== undefined
+    })
+    const childIndex = existingChildren.length
+    
+    const childColor = generateSimilarColor(parentColor, childIndex)
+    
     const newStage: Stage = {
       id: Date.now().toString(),
       name: `Stage ${stages.length + 1}`,
       position: newPosition,
       yPosition: newYPosition,
-      color: '#667eea',
+      color: childColor,
     }
 
-    // Create flow from selected stage to new stage
-    let updatedFlows = createFlowWithProportionalSplit(selectedStageId, newStage.id, flows)
+    // Create flow from selected stage to new stage with the same color as the child marker
+    let updatedFlows = createFlowWithProportionalSplit(selectedStageId, newStage.id, flows, childColor)
 
     // Balance all flows to ensure outgoing = incoming for each stage
     updatedFlows = balanceFlows(updatedFlows)
@@ -621,38 +750,36 @@ export default function FlowCanvas({
   const sortedStages = [...stages].sort((a, b) => a.position - b.position)
 
   return (
-    <div className="flow-canvas-container">
-      {isCreatingBranch && (
-        <div className="branch-creation-hint">
-          Click on the canvas to create a new marker, or click an existing marker to connect
-        </div>
-      )}
-      {/* Zoom controls */}
+    <>
+      {/* Zoom controls - fixed position above canvas */}
       <div
         style={{
-          position: 'absolute',
-          top: '1rem',
-          right: '1rem',
+          position: 'fixed',
+          top: 'calc(2rem + 1rem + 80px)',
+          right: 'calc(2rem + 1rem)',
           zIndex: 1000,
           display: 'flex',
           flexDirection: 'column',
           gap: '0.5rem',
           alignItems: 'flex-end',
+          width: '200px',
         }}
       >
-        {/* Zoom control pill */}
-        <div
-          style={{
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: '9999px',
-            padding: '0.375rem 0.75rem',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-          }}
-        >
+          {/* Zoom control pill */}
+          <div
+            style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '9999px',
+              padding: '0.375rem 0.75rem',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.75rem',
+              width: '200px',
+              justifyContent: 'space-between',
+            }}
+          >
           <button
             onClick={() => setIsZoomLocked(!isZoomLocked)}
             style={{
@@ -720,17 +847,17 @@ export default function FlowCanvas({
             <RotateCcw size={18} color="#4a5568" />
           </button>
         </div>
-        {/* Zoom slider */}
-        <div
-          style={{
-            background: 'white',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            padding: '0.5rem 0.75rem',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
-            minWidth: '200px',
-          }}
-        >
+          {/* Zoom slider */}
+          <div
+            style={{
+              background: 'white',
+              border: '1px solid #e2e8f0',
+              borderRadius: '8px',
+              padding: '0.5rem 0.75rem',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              width: '200px',
+            }}
+          >
           <input
             type="range"
             min="0.1"
@@ -748,9 +875,15 @@ export default function FlowCanvas({
               opacity: isZoomLocked ? 0.5 : 1,
             }}
           />
+          </div>
         </div>
-      </div>
-      <div ref={canvasRef} className="flow-canvas" style={{ height: canvasHeight }}>
+      <div className="flow-canvas-container" onWheel={handleWheel}>
+        {isCreatingBranch && (
+          <div className="branch-creation-hint">
+            Click on the canvas to create a new marker, or click an existing marker to connect
+          </div>
+        )}
+        <div ref={canvasRef} className="flow-canvas" style={{ height: canvasHeight, overflow: 'hidden' }}>
         <svg
           ref={svgRef}
           onMouseDown={handlePanStart}
@@ -759,10 +892,14 @@ export default function FlowCanvas({
           height={canvasHeight}
           className={`flow-svg ${isCreatingBranch ? 'branch-mode' : ''}`}
           onClick={handleCanvasClick}
+          clipPath="url(#canvas-clip)"
         >
-          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {/* Define arrow markers for different colors */}
           <defs>
+            {/* Clip path to restrict content to canvas boundaries */}
+            <clipPath id="canvas-clip" clipPathUnits="userSpaceOnUse">
+              <rect x="0" y="0" width={canvasWidth} height={canvasHeight} />
+            </clipPath>
+            {/* Define arrow markers for different colors */}
             <marker
               id="arrowhead"
               markerWidth="10"
@@ -800,6 +937,7 @@ export default function FlowCanvas({
             })}
           </defs>
           
+          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Gray out area to the left of 0% ticker */}
           {(() => {
             const zeroTickerX = getStageX(0)
@@ -1426,8 +1564,9 @@ export default function FlowCanvas({
           })}
           </g>
         </svg>
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 
