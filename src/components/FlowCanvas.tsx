@@ -454,6 +454,32 @@ export default function FlowCanvas({
     setEditingFlow(null)
     setSelectedFlowId(null)
   }
+  
+  const handleFlowDelete = () => {
+    if (!editingFlow) return
+    
+    const sourceStageId = editingFlow.fromStageId
+    const targetStageId = editingFlow.toStageId
+    
+    // Remove the flow
+    let updatedFlows = flows.filter(f => f.id !== editingFlow.id)
+    
+    // Recalculate sibling flows from the same source
+    const siblingFlows = updatedFlows.filter(f => f.fromStageId === sourceStageId)
+    if (siblingFlows.length > 0) {
+      updatedFlows = recalculateSiblingFlowValues(sourceStageId, updatedFlows)
+    }
+    
+    // Recalculate flows to the same target (if there are other flows to that target)
+    const flowsToTarget = updatedFlows.filter(f => f.toStageId === targetStageId)
+    if (flowsToTarget.length > 0) {
+      updatedFlows = recalculateSiblingFlowValues(targetStageId, updatedFlows)
+    }
+    
+    onFlowsChange(updatedFlows)
+    setEditingFlow(null)
+    setSelectedFlowId(null)
+  }
 
   const handleStageClick = (stage: Stage) => {
     // Clear flow selection when clicking stage
@@ -1599,6 +1625,36 @@ export default function FlowCanvas({
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
+                        handleFlowDelete()
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Delete flow"
+                      style={{
+                        padding: '8px',
+                        background: '#fee2e2',
+                        color: '#dc2626',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#fecaca'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#fee2e2'
+                        e.currentTarget.style.transform = 'scale(1)'
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
                         handleFlowUpdate()
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
@@ -1679,9 +1735,16 @@ export default function FlowCanvas({
             const incomingFlows = flows.filter(f => f.toStageId === stage.id)
             const isRootMarker = incomingFlows.length === 0
             
+            // Calculate height needed for incoming flows section
+            const incomingFlowsHeight = incomingFlows.length > 0 
+              ? 40 + (incomingFlows.length * 32) // Header + flow items
+              : 0
+            
             // Modal dimensions
             const modalWidth = 320
-            const modalHeight = isRootMarker ? 220 : 240
+            const modalHeight = isRootMarker 
+              ? 220 + incomingFlowsHeight
+              : 240 + incomingFlowsHeight
             const modalPadding = 20
             
             // Calculate position ensuring modal stays within canvas bounds
@@ -1853,9 +1916,62 @@ export default function FlowCanvas({
                         outline: 'none',
                         transition: 'border-color 0.2s',
                       }}
-                      placeholder="Description (optional)"
-                    />
+                    placeholder="Description (optional)"
+                  />
                   </div>
+                  
+                  {/* Incoming flows section */}
+                  {incomingFlows.length > 0 && (() => {
+                    const totalIncomingValue = incomingFlows.reduce((sum, f) => sum + f.value, 0)
+                    return (
+                      <div style={{ 
+                        paddingTop: '8px',
+                        borderTop: '1px solid #e2e8f0',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}>
+                        <div
+                          style={{
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: '#1a202c',
+                            marginBottom: '4px',
+                          }}
+                        >
+                          Incoming Flows:
+                        </div>
+                        {incomingFlows.map((flow) => {
+                          const percentage = totalIncomingValue > 0 
+                            ? ((flow.value / totalIncomingValue) * 100).toFixed(1)
+                            : '0.0'
+                          const fromStage = stages.find(s => s.id === flow.fromStageId)
+                          return (
+                            <div
+                              key={flow.id}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '6px 8px',
+                                background: '#f8fafc',
+                                borderRadius: '6px',
+                                fontSize: '13px',
+                              }}
+                            >
+                              <span style={{ color: '#475569', fontWeight: '500' }}>
+                                {flow.name || `Flow from ${fromStage?.name || flow.fromStageId}`}
+                              </span>
+                              <span style={{ color: '#64748b', fontWeight: '600' }}>
+                                {percentage}%
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
+                  
                   <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                     {!isRootMarker && (
                       <button
