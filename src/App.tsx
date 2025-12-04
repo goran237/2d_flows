@@ -322,13 +322,192 @@ function App() {
         </div>
       </header>
       <div className="app-content">
-        <FlowCanvas
-          stages={stages}
-          flows={flows}
-          onStagesChange={handleStagesChange}
-          onFlowsChange={handleFlowsChange}
-          onStagesChangeNoHistory={handleStagesChangeNoHistory}
-        />
+        <div style={{ 
+          flexShrink: 0, 
+          width: '100%',
+          maxWidth: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          <div style={{
+            padding: '1.5rem',
+            background: 'white',
+            borderRadius: '8px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+            width: '100%',
+          }}>
+            <FlowCanvas
+              stages={stages}
+              flows={flows}
+              onStagesChange={handleStagesChange}
+              onFlowsChange={handleFlowsChange}
+              onStagesChangeNoHistory={handleStagesChangeNoHistory}
+            />
+          </div>
+        </div>
+        
+        {/* Top 5 Paths Table */}
+        {(() => {
+          // Find all paths from root stages to leaf stages
+          const findAllPaths = (): Array<{ flows: Array<{ id: string; name: string }>; weight: number }> => {
+            // Find root stages (no incoming flows)
+            const rootStages = stages.filter(stage => {
+              return flows.filter(f => f.toStageId === stage.id).length === 0
+            })
+            
+            // Find leaf stages (no outgoing flows)
+            const leafStages = stages.filter(stage => {
+              return flows.filter(f => f.fromStageId === stage.id).length === 0
+            })
+            
+            const allPaths: Array<{ flows: Array<{ id: string; name: string }>; weight: number }> = []
+            
+            // DFS to find all paths from each root to each leaf
+            const findPaths = (currentStageId: string, path: Array<{ id: string; name: string }>, visited: Set<string>) => {
+              // Check if we reached a leaf
+              const isLeaf = leafStages.some(s => s.id === currentStageId)
+              if (isLeaf && path.length > 0) {
+                // Calculate path weight as minimum flow value (bottleneck)
+                const pathFlows = path.map(flowRef => flows.find(f => f.id === flowRef.id)).filter(Boolean) as Flow[]
+                if (pathFlows.length > 0) {
+                  const pathWeight = Math.min(...pathFlows.map(f => f.value))
+                  allPaths.push({ flows: path.map(flowRef => ({ id: flowRef.id, name: flowRef.name })), weight: pathWeight })
+                }
+                return
+              }
+              
+              // Find all outgoing flows from current stage
+              const outgoingFlows = flows.filter(f => f.fromStageId === currentStageId)
+              
+              for (const flow of outgoingFlows) {
+                // Avoid cycles
+                if (visited.has(flow.toStageId)) continue
+                
+                visited.add(flow.toStageId)
+                path.push({ id: flow.id, name: flow.name })
+                findPaths(flow.toStageId, path, visited)
+                path.pop()
+                visited.delete(flow.toStageId)
+              }
+            }
+            
+            // Start from each root stage
+            for (const rootStage of rootStages) {
+              findPaths(rootStage.id, [], new Set([rootStage.id]))
+            }
+            
+            return allPaths
+          }
+          
+          const topPaths = findAllPaths()
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, 5)
+          
+          if (topPaths.length === 0) return null
+          
+          return (
+            <div style={{
+              padding: '1.5rem',
+              background: 'white',
+              borderRadius: '8px',
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+              width: '100%',
+              flexShrink: 0,
+            }}>
+              <h3 style={{
+                margin: '0 0 1rem 0',
+                fontSize: '18px',
+                fontWeight: '600',
+                color: '#1a202c',
+              }}>
+                Top 5 Paths by Flow Weight
+              </h3>
+              <table style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+              }}>
+                <thead>
+                  <tr style={{
+                    borderBottom: '2px solid #e2e8f0',
+                  }}>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#64748b',
+                    }}>
+                      Rank
+                    </th>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'left',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#64748b',
+                    }}>
+                      Path
+                    </th>
+                    <th style={{
+                      padding: '0.75rem',
+                      textAlign: 'right',
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#64748b',
+                    }}>
+                      Weight
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topPaths.map((path, index) => (
+                    <tr
+                      key={index}
+                      style={{
+                        borderBottom: '1px solid #f1f5f9',
+                      }}
+                    >
+                      <td style={{
+                        padding: '0.75rem',
+                        fontSize: '14px',
+                        color: '#1a202c',
+                        fontWeight: '500',
+                      }}>
+                        {index + 1}
+                      </td>
+                      <td style={{
+                        padding: '0.75rem',
+                        fontSize: '14px',
+                        color: '#475569',
+                      }}>
+                        {path.flows.map((flow, flowIndex) => {
+                          const flowObj = flows.find(f => f.id === flow.id)
+                          return (
+                            <span key={flow.id}>
+                              {flowObj?.name || flow.name || `Flow ${flowIndex + 1}`}
+                              {flowIndex < path.flows.length - 1 && (
+                                <span style={{ margin: '0 0.5rem', color: '#94a3b8' }}>→</span>
+                              )}
+                            </span>
+                          )
+                        })}
+                      </td>
+                      <td style={{
+                        padding: '0.75rem',
+                        fontSize: '14px',
+                        color: '#1a202c',
+                        fontWeight: '600',
+                        textAlign: 'right',
+                      }}>
+                        {path.weight.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })()}
       </div>
       
       {/* Notification Modal */}

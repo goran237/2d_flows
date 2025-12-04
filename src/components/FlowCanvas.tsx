@@ -36,32 +36,50 @@ export default function FlowCanvas({
   const [editingStage, setEditingStage] = useState<Stage | null>(null)
   
   // Pan and zoom state
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(0.8)
   // Initialize pan so that 0% is to the left of the canvas
   // We'll calculate this after canvasWidth is set
   const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [initialPan, setInitialPan] = useState({ x: 0, y: 0 })
   const [isPanning, setIsPanning] = useState(false)
   const [panStart, setPanStart] = useState({ x: 0, y: 0 })
   const [isZoomLocked, setIsZoomLocked] = useState(false) // Unlocked by default
 
-  // Canvas coordinate system: -10% to 110% (0% is not at left edge)
+  // Canvas coordinate system: -10% to 101% (0% is not at left edge)
   const CANVAS_MIN_POSITION = -10
-  const CANVAS_MAX_POSITION = 110
-  const CANVAS_RANGE = CANVAS_MAX_POSITION - CANVAS_MIN_POSITION // 120
+  const CANVAS_MAX_POSITION = 101
+  const CANVAS_RANGE = CANVAS_MAX_POSITION - CANVAS_MIN_POSITION // 111
 
   useEffect(() => {
     const updateSize = () => {
       if (canvasRef.current) {
-        // Get the container width (parent of canvasRef)
+        // Get the container width (parent of canvasRef - the flow-canvas-container)
+        // The container is inside a panel with 1.5rem (24px) padding on all sides
         const container = canvasRef.current.parentElement
-        const containerWidth = container ? container.clientWidth - 64 : 1200 // Subtract padding (2rem * 2 = 64px)
+        // Get the panel (parent of container) to calculate available width
+        const panel = container?.parentElement
+        const panelWidth = panel ? panel.clientWidth : 1200
+        // Subtract left and right padding (1.5rem = 24px each side = 48px total)
+        const containerWidth = panelWidth - 48
         
-        // Multiply canvas width by 10 to increase x-axis scale 10x
-        const newCanvasWidth = containerWidth * 10
+        // Calculate canvas width to exactly fit the range from -10% to 101% (111% total range)
+        // The canvas should be scrollable but end exactly at 101%
+        // Scale factor to make canvas wider than container for scrolling
+        const scaleFactor = 10
+        // Calculate width: containerWidth * scaleFactor gives us scrollable area
+        // But we need to ensure 101% maps to the right edge
+        // The mapping function uses: x = ((position - (-10)) / 111) * canvasWidth
+        // For 101%: x = ((101 - (-10)) / 111) * canvasWidth = canvasWidth
+        // So canvasWidth should be: containerWidth * scaleFactor
+        const newCanvasWidth = containerWidth * scaleFactor
         setCanvasWidth(newCanvasWidth)
         
-        // Set the canvas div width to be wider than container to ensure scrollbar is always visible
-        canvasRef.current.style.width = `${newCanvasWidth}px`
+        // Calculate the exact width where 101% should be
+        // getStageX(101) = ((101 - (-10)) / 111) * canvasWidth = canvasWidth
+        // So 101% maps to exactly canvasWidth
+        // Set the canvas div width to exactly where 101% is (no extra space beyond 101%)
+        const maxX = ((CANVAS_MAX_POSITION - CANVAS_MIN_POSITION) / CANVAS_RANGE) * newCanvasWidth
+        canvasRef.current.style.width = `${maxX}px`
         
         // Calculate height to fit viewport (accounting for header ~80px and padding)
         const viewportHeight = window.innerHeight
@@ -74,7 +92,9 @@ export default function FlowCanvas({
         // Calculate the SVG x coordinate of -1% position
         const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * newCanvasWidth
         // To have -1% at left edge: pan.x = -minusOnePercentX * zoom (for zoom=1)
-        setPan({ x: -minusOnePercentX, y: 0 })
+        const initialPanValue = { x: -minusOnePercentX, y: 0 }
+        setPan(initialPanValue)
+        setInitialPan(initialPanValue)
       }
     }
     updateSize()
@@ -135,13 +155,13 @@ export default function FlowCanvas({
   }, [isPanning, panStart])
 
   const getStageX = (position: number) => {
-    // Map position from [-10, 110] range to [0, canvasWidth]
+    // Map position from [-10, 101] range to [0, canvasWidth]
     const normalizedPosition = (position - CANVAS_MIN_POSITION) / CANVAS_RANGE
     return normalizedPosition * canvasWidth
   }
 
   const getPositionFromX = (x: number) => {
-    // Map x from [0, canvasWidth] to [-10, 110] range
+    // Map x from [0, canvasWidth] to [-10, 101] range
     const normalizedX = x / canvasWidth
     const position = normalizedX * CANVAS_RANGE + CANVAS_MIN_POSITION
     return Math.max(CANVAS_MIN_POSITION, Math.min(CANVAS_MAX_POSITION, position))
@@ -157,8 +177,8 @@ export default function FlowCanvas({
   // Generate ticker positions - smaller every 0.1%, larger every 1%, starting from -10%
   const getTickerPositions = (): Array<{ position: number; isMajor: boolean }> => {
     const tickers: Array<{ position: number; isMajor: boolean }> = []
-    // Generate tickers every 0.1% from -10% to 110%
-    for (let i = -100; i <= 1100; i += 1) {
+    // Generate tickers every 0.1% from -10% to 101%
+    for (let i = -100; i <= 1010; i += 1) {
       const position = i / 10
       // Major tickers every 1% (when position is a whole number)
       const isMajor = i % 10 === 0
@@ -739,6 +759,7 @@ export default function FlowCanvas({
   const getStageY = (stage: Stage) => {
     return stage.yPosition ?? canvasHeight / 2
   }
+  
 
   // Calculate node height based on total flow value (proportional to root marker)
   const getNodeHeight = (stageId: string): number => {
@@ -865,12 +886,9 @@ export default function FlowCanvas({
           </span>
           <button
             onClick={() => {
-              setZoom(1)
-              // Reset to initial view where -1% is at the left border
-              if (canvasRef.current) {
-                const minusOnePercentX = ((-1 - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasRef.current.offsetWidth * 10
-                setPan({ x: -minusOnePercentX, y: 0 })
-              }
+              setZoom(0.8)
+              // Reset to initial pan position
+              setPan(initialPan)
             }}
             style={{
               background: 'transparent',
@@ -942,9 +960,9 @@ export default function FlowCanvas({
           clipPath="url(#canvas-clip)"
         >
           <defs>
-            {/* Clip path to restrict content to canvas boundaries */}
+            {/* Clip path to restrict content to canvas boundaries - clip at exactly 101% */}
             <clipPath id="canvas-clip" clipPathUnits="userSpaceOnUse">
-              <rect x="0" y="0" width={canvasWidth} height={canvasHeight} />
+              <rect x="0" y="0" width={((CANVAS_MAX_POSITION - CANVAS_MIN_POSITION) / CANVAS_RANGE) * canvasWidth} height={canvasHeight} />
             </clipPath>
             {/* Define arrow markers for different colors */}
             <marker
