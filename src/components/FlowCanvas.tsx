@@ -2,7 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { Stage, Flow } from '../types'
 import StageMarker from './StageMarker'
 import FlowPath from './FlowPath'
-import { Lock, Unlock, RotateCcw } from 'lucide-react'
+import { Lock, Unlock, RotateCcw, Check, X, Trash2, GitBranch } from 'lucide-react'
 import './FlowCanvas.css'
 
 interface FlowCanvasProps {
@@ -33,6 +33,7 @@ export default function FlowCanvas({
   const [isCreatingBranch, setIsCreatingBranch] = useState(false)
   const [selectedFlowId, setSelectedFlowId] = useState<string | null>(null)
   const [editingFlow, setEditingFlow] = useState<Flow | null>(null)
+  const [editingStage, setEditingStage] = useState<Stage | null>(null)
   
   // Pan and zoom state
   const [zoom, setZoom] = useState(1)
@@ -459,18 +460,16 @@ export default function FlowCanvas({
     setSelectedFlowId(null)
     setEditingFlow(null)
     
-    if (!selectedStageId) {
-      // No marker selected yet - select this marker
-      setSelectedStageId(stage.id)
-      setIsCreatingBranch(true)
-    } else if (selectedStageId === stage.id) {
-      // Clicking the same marker - cancel selection
-      setIsCreatingBranch(false)
-      setSelectedStageId(null)
-    } else {
-      // Another marker is selected - create flow from selected marker to clicked marker
+    // If already editing this stage, close the modal
+    if (editingStage?.id === stage.id) {
+      setEditingStage(null)
+      return
+    }
+    
+    // If another stage is selected for branch creation, create flow
+    if (selectedStageId && selectedStageId !== stage.id) {
       const selectedStage = stages.find(s => s.id === selectedStageId)
-      if (selectedStage && stage.id !== selectedStage.id) {
+      if (selectedStage) {
         // Only create flow if clicked marker is to the right of the selected marker
         if (stage.position > selectedStage.position) {
           // Use the target marker's color for the flow
@@ -482,10 +481,27 @@ export default function FlowCanvas({
           onFlowsChange(updatedFlows)
         }
       }
-      // Clear selection after creating flow (or if flow wasn't created)
+      // Clear selection after creating flow
       setIsCreatingBranch(false)
       setSelectedStageId(null)
+    } else if (!selectedStageId) {
+      // No marker selected - open edit modal for this marker
+      setEditingStage({ ...stage })
     }
+  }
+  
+  const handleStageModalUpdate = () => {
+    if (!editingStage) return
+    
+    onStagesChange(stages.map(s => s.id === editingStage.id ? editingStage : s))
+    setEditingStage(null)
+  }
+  
+  const handleStageModalDelete = () => {
+    if (!editingStage) return
+    
+    handleStageDelete(editingStage.id)
+    setEditingStage(null)
   }
 
   const handleCanvasClick = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -494,9 +510,9 @@ export default function FlowCanvas({
       return
     }
     
-    // Don't close flow edit modal if clicking inside it or if user is selecting text
+    // Don't close modals if clicking inside them or if user is selecting text
     const target = e.target as HTMLElement
-    if (target.closest('.flow-edit-modal')) {
+    if (target.closest('.flow-edit-modal') || target.closest('.stage-edit-modal')) {
       return
     }
     
@@ -510,6 +526,11 @@ export default function FlowCanvas({
     if (selectedFlowId) {
       setSelectedFlowId(null)
       setEditingFlow(null)
+    }
+    
+    // Clear stage edit modal when clicking canvas
+    if (editingStage) {
+      setEditingStage(null)
     }
     
     if (!isCreatingBranch || !selectedStageId) return
@@ -1411,11 +1432,11 @@ export default function FlowCanvas({
             return (
               <foreignObject
                 key={`flow-edit-${flow.id}`}
-                x={midX - 150}
-                y={midY - 80}
-                width="300"
-                height="160"
-                style={{ pointerEvents: 'all' }}
+                x={midX - 160}
+                y={midY - 90}
+                width="320"
+                height="180"
+                style={{ pointerEvents: 'all', overflow: 'visible' }}
                 onClick={(e) => e.stopPropagation()}
                 onMouseDown={(e) => e.stopPropagation()}
               >
@@ -1433,110 +1454,165 @@ export default function FlowCanvas({
                   }}
                   style={{
                     background: 'white',
-                    border: '2px solid #667eea',
-                    borderRadius: '8px',
-                    padding: '12px',
-                    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.1)',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: '8px',
+                    gap: '12px',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    minHeight: 'fit-content',
                   }}
                 >
-                  <input
-                    type="text"
-                    value={editingFlow.name}
-                    onChange={(e) =>
-                      setEditingFlow({ ...editingFlow, name: e.target.value })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        handleFlowUpdate()
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setEditingFlow(null)
-                        setSelectedFlowId(null)
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#64748b',
+                        fontWeight: '500',
+                        minWidth: '80px',
+                        flexShrink: '0',
+                      }}
+                    >
+                      Name:
+                    </label>
+                    <input
+                      type="text"
+                      value={editingFlow.name}
+                      onChange={(e) =>
+                        setEditingFlow({ ...editingFlow, name: e.target.value })
                       }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onMouseUp={(e) => e.stopPropagation()}
-                    onMouseMove={(e) => e.stopPropagation()}
-                    onFocus={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                      // Don't close modal on blur if text is being selected
-                      const selection = window.getSelection()
-                      if (selection && selection.toString().length > 0) {
-                        e.preventDefault()
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleFlowUpdate()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setEditingFlow(null)
+                          setSelectedFlowId(null)
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseUp={(e) => e.stopPropagation()}
+                      onMouseMove={(e) => e.stopPropagation()}
+                      onBlur={(e) => {
+                        // Don't close modal on blur if text is being selected
+                        const selection = window.getSelection()
+                        if (selection && selection.toString().length > 0) {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          // Re-focus to keep selection
+                          setTimeout(() => e.target.focus(), 0)
+                        }
+                        e.target.style.borderColor = '#e2e8f0'
+                      }}
+                      onSelect={(e) => e.stopPropagation()}
+                      onFocus={(e) => {
                         e.stopPropagation()
-                        // Re-focus to keep selection
-                        setTimeout(() => e.target.focus(), 0)
+                        e.target.style.borderColor = '#667eea'
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        flex: '1',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                      }}
+                      placeholder="Flow name"
+                      autoFocus
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#64748b',
+                        fontWeight: '500',
+                        minWidth: '80px',
+                        flexShrink: '0',
+                      }}
+                    >
+                      Importance:
+                    </label>
+                    <input
+                      type="number"
+                      value={editingFlow.value}
+                      onChange={(e) =>
+                        setEditingFlow({ ...editingFlow, value: Number(e.target.value) })
                       }
-                    }}
-                    onSelect={(e) => e.stopPropagation()}
-                    style={{
-                      padding: '6px',
-                      border: '1px solid #cbd5e0',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      width: '100%',
-                    }}
-                    placeholder="Flow name"
-                    autoFocus
-                  />
-                  <input
-                    type="number"
-                    value={editingFlow.value}
-                    onChange={(e) =>
-                      setEditingFlow({ ...editingFlow, value: Number(e.target.value) })
-                    }
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleFlowUpdate()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setEditingFlow(null)
+                          setSelectedFlowId(null)
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onFocus={(e) => {
                         e.stopPropagation()
-                        handleFlowUpdate()
-                      } else if (e.key === 'Escape') {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setEditingFlow(null)
-                        setSelectedFlowId(null)
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onFocus={(e) => e.stopPropagation()}
-                    style={{
-                      padding: '6px',
-                      border: '1px solid #cbd5e0',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                      width: '100%',
-                    }}
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    placeholder="Percentage (0-100)"
-                  />
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        e.target.style.borderColor = '#667eea'
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#e2e8f0'
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        flex: '1',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                      }}
+                      min="0"
+                      max="100"
+                      step="0.1"
+                      placeholder="0-100"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
                         handleFlowUpdate()
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
+                      title="Save changes"
                       style={{
-                        padding: '6px 12px',
+                        padding: '8px',
                         background: '#667eea',
                         color: 'white',
                         border: 'none',
-                        borderRadius: '4px',
+                        borderRadius: '8px',
                         cursor: 'pointer',
-                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#5568d3'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#667eea'
+                        e.currentTarget.style.transform = 'scale(1)'
                       }}
                     >
-                      Save
+                      <Check size={16} />
                     </button>
                     <button
                       onClick={(e) => {
@@ -1545,23 +1621,347 @@ export default function FlowCanvas({
                         setSelectedFlowId(null)
                       }}
                       onMouseDown={(e) => e.stopPropagation()}
+                      title="Cancel"
                       style={{
-                        padding: '6px 12px',
-                        background: '#e2e8f0',
-                        color: '#4a5568',
+                        padding: '8px',
+                        background: '#f1f5f9',
+                        color: '#64748b',
                         border: 'none',
-                        borderRadius: '4px',
+                        borderRadius: '8px',
                         cursor: 'pointer',
-                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#e2e8f0'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f1f5f9'
+                        e.currentTarget.style.transform = 'scale(1)'
                       }}
                     >
-                      Cancel
+                      <X size={16} />
                     </button>
                   </div>
                 </div>
               </foreignObject>
             )
           })}
+          
+          {/* Render stage edit modal after flows so it appears on top */}
+          {editingStage && (() => {
+            const stage = stages.find(s => s.id === editingStage.id)
+            if (!stage) return null
+            
+            const stageX = getStageX(stage.position)
+            const stageY = getStageY(stage)
+            
+            // Position modal to the right of the marker
+            const modalX = stageX + 20
+            const modalY = stageY - 100
+            
+            // Check if this is the root marker (no incoming flows)
+            const incomingFlows = flows.filter(f => f.toStageId === stage.id)
+            const isRootMarker = incomingFlows.length === 0
+            
+            // Modal dimensions
+            const modalWidth = 320
+            const modalHeight = isRootMarker ? 200 : 220
+            const modalPadding = 20
+            
+            // Calculate position ensuring modal stays within canvas bounds
+            const visibleMinX = -pan.x / zoom
+            const visibleMaxX = (canvasWidth - pan.x) / zoom
+            const visibleMinY = -pan.y / zoom
+            const visibleMaxY = (canvasHeight - pan.y) / zoom
+            
+            let finalModalX = modalX
+            let finalModalY = modalY
+            
+            // Adjust X position if modal goes outside visible area
+            if (finalModalX < visibleMinX + modalPadding) {
+              finalModalX = visibleMinX + modalPadding
+            } else if (finalModalX + modalWidth > visibleMaxX - modalPadding) {
+              finalModalX = visibleMaxX - modalWidth - modalPadding
+            }
+            
+            // Adjust Y position if modal goes outside visible area
+            if (finalModalY < visibleMinY + modalPadding) {
+              finalModalY = visibleMinY + modalPadding
+            } else if (finalModalY + modalHeight > visibleMaxY - modalPadding) {
+              finalModalY = visibleMaxY - modalHeight - modalPadding
+            }
+            
+            return (
+              <foreignObject
+                key={`stage-edit-${editingStage.id}`}
+                x={finalModalX}
+                y={finalModalY}
+                width={modalWidth}
+                height={modalHeight}
+                style={{ pointerEvents: 'all', overflow: 'visible' }}
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div
+                  className="stage-edit-modal"
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseUp={(e) => e.stopPropagation()}
+                  onMouseMove={(e) => {
+                    const selection = window.getSelection()
+                    if (selection && selection.toString().length > 0) {
+                      e.stopPropagation()
+                    }
+                  }}
+                  style={{
+                    background: 'white',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15), 0 4px 10px rgba(0, 0, 0, 0.1)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px',
+                    width: '100%',
+                    boxSizing: 'border-box',
+                    minHeight: 'fit-content',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#64748b',
+                        fontWeight: '500',
+                        minWidth: '80px',
+                        flexShrink: '0',
+                      }}
+                    >
+                      Name:
+                    </label>
+                    <input
+                      type="text"
+                      value={editingStage.name}
+                      onChange={(e) =>
+                        setEditingStage({ ...editingStage, name: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          handleStageModalUpdate()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setEditingStage(null)
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onFocus={(e) => {
+                        e.stopPropagation()
+                        e.target.style.borderColor = '#667eea'
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        flex: '1',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#e2e8f0'
+                      }}
+                      placeholder="Marker name"
+                      autoFocus
+                    />
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                    <label
+                      style={{
+                        fontSize: '14px',
+                        color: '#64748b',
+                        fontWeight: '500',
+                        minWidth: '80px',
+                        flexShrink: '0',
+                        paddingTop: '8px',
+                      }}
+                    >
+                      Description:
+                    </label>
+                    <textarea
+                      value={editingStage.description || ''}
+                      onChange={(e) =>
+                        setEditingStage({ ...editingStage, description: e.target.value })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          setEditingStage(null)
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onFocus={(e) => {
+                        e.stopPropagation()
+                        e.target.style.borderColor = '#667eea'
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#e2e8f0'
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        fontSize: '14px',
+                        flex: '1',
+                        minHeight: '50px',
+                        maxHeight: '80px',
+                        resize: 'vertical',
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                        transition: 'border-color 0.2s',
+                      }}
+                      placeholder="Description (optional)"
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                    {!isRootMarker && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleStageModalDelete()
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        title="Delete marker"
+                        style={{
+                          padding: '8px',
+                          background: '#fee2e2',
+                          color: '#dc2626',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#fecaca'
+                          e.currentTarget.style.transform = 'scale(1.05)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#fee2e2'
+                          e.currentTarget.style.transform = 'scale(1)'
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setSelectedStageId(editingStage.id)
+                        setIsCreatingBranch(true)
+                        setEditingStage(null)
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Create branch"
+                      style={{
+                        padding: '8px',
+                        background: '#d1fae5',
+                        color: '#059669',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#a7f3d0'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#d1fae5'
+                        e.currentTarget.style.transform = 'scale(1)'
+                      }}
+                    >
+                      <GitBranch size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleStageModalUpdate()
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Save changes"
+                      style={{
+                        padding: '8px',
+                        background: '#667eea',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#5568d3'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#667eea'
+                        e.currentTarget.style.transform = 'scale(1)'
+                      }}
+                    >
+                      <Check size={16} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setEditingStage(null)
+                      }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      title="Cancel"
+                      style={{
+                        padding: '8px',
+                        background: '#f1f5f9',
+                        color: '#64748b',
+                        border: 'none',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#e2e8f0'
+                        e.currentTarget.style.transform = 'scale(1.05)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = '#f1f5f9'
+                        e.currentTarget.style.transform = 'scale(1)'
+                      }}
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+              </foreignObject>
+            )
+          })()}
           </g>
         </svg>
         </div>

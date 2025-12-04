@@ -132,9 +132,24 @@ async function createSchema(): Promise<void> {
       name TEXT NOT NULL,
       position REAL NOT NULL,
       yPosition REAL,
-      color TEXT
+      color TEXT,
+      description TEXT
     )
   `)
+  
+  // Migrate existing tables to add description column if it doesn't exist
+  try {
+    // Check if description column exists by trying to query it
+    db.exec('SELECT description FROM stages LIMIT 1')
+  } catch {
+    // Column doesn't exist, add it
+    try {
+      db.run('ALTER TABLE stages ADD COLUMN description TEXT')
+    } catch (e) {
+      // Column might already exist or table might not exist yet
+      console.log('Migration: description column may already exist or table is new')
+    }
+  }
 
   // Create flows table
   db.run(`
@@ -229,7 +244,7 @@ async function loadDatabaseFromIndexedDB(): Promise<Uint8Array | null> {
 }
 
 // Save all stages to database
-export async function saveStages(stages: Array<{ id: string; name: string; position: number; yPosition?: number; color?: string }>): Promise<void> {
+export async function saveStages(stages: Array<{ id: string; name: string; position: number; yPosition?: number; color?: string; description?: string }>): Promise<void> {
   // Always try to initialize if not already done
   if (!dbInitialized || !db) {
     try {
@@ -253,7 +268,7 @@ export async function saveStages(stages: Array<{ id: string; name: string; posit
     db.run('DELETE FROM stages')
     
     // Insert all stages
-    const stmt = db.prepare('INSERT INTO stages (id, name, position, yPosition, color) VALUES (?, ?, ?, ?, ?)')
+    const stmt = db.prepare('INSERT INTO stages (id, name, position, yPosition, color, description) VALUES (?, ?, ?, ?, ?, ?)')
     
     for (const stage of stages) {
       stmt.run([
@@ -262,6 +277,7 @@ export async function saveStages(stages: Array<{ id: string; name: string; posit
         stage.position,
         stage.yPosition ?? null,
         stage.color ?? null,
+        stage.description ?? null,
       ])
     }
     
@@ -351,7 +367,7 @@ export async function saveFlows(flows: Array<{ id: string; name: string; fromSta
 }
 
 // Load all stages from database
-export async function loadStages(): Promise<Array<{ id: string; name: string; position: number; yPosition?: number; color?: string }>> {
+export async function loadStages(): Promise<Array<{ id: string; name: string; position: number; yPosition?: number; color?: string; description?: string }>> {
   if (!db) {
     try {
       await initDatabase()
@@ -378,6 +394,7 @@ export async function loadStages(): Promise<Array<{ id: string; name: string; po
       position: row[2] as number,
       yPosition: row[3] !== null ? (row[3] as number) : undefined,
       color: row[4] !== null ? (row[4] as string) : undefined,
+      description: row[5] !== null ? (row[5] as string) : undefined,
     }))
   } catch (error) {
     console.error('Failed to load stages from database:', error)
@@ -423,13 +440,13 @@ export async function loadFlows(): Promise<Array<{ id: string; name: string; fro
 }
 
 // Save both stages and flows in a single transaction
-export async function saveAll(stages: Array<{ id: string; name: string; position: number; yPosition?: number; color?: string }>, flows: Array<{ id: string; name: string; fromStageId: string; toStageId: string; value: number; branchIndex?: number; color?: string }>): Promise<void> {
+export async function saveAll(stages: Array<{ id: string; name: string; position: number; yPosition?: number; color?: string; description?: string }>, flows: Array<{ id: string; name: string; fromStageId: string; toStageId: string; value: number; branchIndex?: number; color?: string }>): Promise<void> {
   await saveStages(stages)
   await saveFlows(flows)
 }
 
 // Load both stages and flows
-export async function loadAll(): Promise<{ stages: Array<{ id: string; name: string; position: number; yPosition?: number; color?: string }>, flows: Array<{ id: string; name: string; fromStageId: string; toStageId: string; value: number; branchIndex?: number; color?: string }> }> {
+export async function loadAll(): Promise<{ stages: Array<{ id: string; name: string; position: number; yPosition?: number; color?: string; description?: string }>, flows: Array<{ id: string; name: string; fromStageId: string; toStageId: string; value: number; branchIndex?: number; color?: string }> }> {
   const stages = await loadStages()
   const flows = await loadFlows()
   return { stages, flows }

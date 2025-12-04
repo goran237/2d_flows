@@ -4,6 +4,7 @@ export interface Stage {
   position: number; // x position from left (0-100 or pixel value)
   yPosition?: number; // y position from top (in pixels, optional - defaults to center)
   color?: string;
+  description?: string;
 }
 
 export interface Flow {
